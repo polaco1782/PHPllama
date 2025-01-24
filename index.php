@@ -60,10 +60,13 @@ class OllamaUI {
         
         // Remove chain of thought from response
         $cleanResponse = preg_replace('/<think>.*?<\/think>/s', '', $fullResponse);
-        
+
+        //$this->__debug_stderr($cleanResponse);
+        //$this->__debug_stderr($chainOfThought);
+       
         return [
-            'response' => trim($cleanResponse),
-            'chainOfThought' => trim($chainOfThought)
+            'response' => $this->formatResponse($cleanResponse),
+            'chainOfThought' => $this->formatResponse($chainOfThought),
         ];
     }
 
@@ -81,6 +84,20 @@ class OllamaUI {
             }
         }
         return ['models' => $this->listModels()];
+    }
+
+    private function formatResponse($text) {
+        $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+        $text = str_replace("\t", '&nbsp;&nbsp;&nbsp;&nbsp;', $text);
+        $text = nl2br($text, false);
+        $text = trim($text);
+        return $text;
+    }
+
+    public function __debug_stderr($message) {
+        $fp = fopen('php://stderr', 'w');
+        fputs($fp, $message . "\n");
+        fclose($fp);
     }
 }
 
