@@ -189,9 +189,10 @@ $data = $ui->handleRequest();
             
             // Create COT button if chain of thought exists
             let cotButton = '';
-            if (data.chainOfThought) {
+            if (data.chainOfThought.trim() && data.chainOfThought !== '<br>\n<br>') {
                 cotButton = `
-                    <div class="cot-button">🤔
+                    <div>
+                        <button class="cot-button">🤔</button>
                         <div class="cot-tooltip">
                             <strong>Chain of Thought:</strong>
                             <p>${data.chainOfThought}</p>
@@ -213,6 +214,8 @@ $data = $ui->handleRequest();
             if (loadingEl.parentNode) {
                 chatHistory.removeChild(loadingEl);
             }
+
+            console.log({error})
 
             const errorEl = document.createElement('div');
             errorEl.classList.add('chat-message', 'error-message');
