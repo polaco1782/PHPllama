@@ -7,6 +7,13 @@ class OllamaUI {
     private $selectedModel = '';
     private $chatHistory = [];
 
+    public function __construct() {
+        if (!function_exists('curl_init')) {
+            print('<h2>Your PHP installation is broken! cURL is not installed on this server!</h2>');
+            exit;
+        }
+    }
+
     public function listModels() {
         $ch = curl_init($this->ollamaUrl . '/tags');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
