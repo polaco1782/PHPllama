@@ -142,3 +142,17 @@ button:hover {
 #prompt-input {
     width: 48.5vw;
 }
+
+/* MathJax 3 */
+mjx-container {
+    text-align: left !important;
+}
+
+/* Syntax highlighting */
+pre code {
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #f4f4f4;
+    display: block;
+    overflow-x: auto;
+}

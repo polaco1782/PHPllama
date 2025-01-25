@@ -5,7 +5,9 @@ ini_set('display_errors', 1);
 class OllamaUI {
     private $ollamaUrl = 'http://localhost:11434/api';
     private $selectedModel = '';
-    private $chatHistory = [];
+    private $startupDirective = 'I am an AI assistant. My task is to help the user and provide information on their request. '.
+                                'I am polite and helpful. I am not rude or offensive, and brief as possible in my responses, '.
+                                'unless the user asks for more information. My name is actually PHPllama, when asked for.';
 
     public function __construct() {
         if (!function_exists('curl_init')) {
@@ -30,7 +32,10 @@ class OllamaUI {
     public function generateChatResponse($prompt, $model, $history = []) {
         $this->selectedModel = $model;
         $ch = curl_init($this->ollamaUrl . '/chat');
-        
+
+        // Add startup directive to history
+        $history = array_merge([['role' => 'assistant', 'content' => $this->startupDirective]], $history);
+
         $messages = array_map(function($msg) {
             return [
                 'role' => $msg['role'],
@@ -53,7 +58,7 @@ class OllamaUI {
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         $response = curl_exec($ch);
         curl_close($ch);
-        
+
         return $this->parseResponse($response);
     }
 
@@ -64,16 +69,11 @@ class OllamaUI {
         // Extract chain of thought
         preg_match('/<think>(.*?)<\/think>/s', $fullResponse, $matches);
         $chainOfThought = $matches[1] ?? '';
-        
-        // Remove chain of thought from response
         $cleanResponse = preg_replace('/<think>.*?<\/think>/s', '', $fullResponse);
 
-        //$this->__debug_stderr($cleanResponse);
-        //$this->__debug_stderr($chainOfThought);
-       
         return [
-            'response' => $this->formatResponse($cleanResponse),
-            'chainOfThought' => $this->formatResponse($chainOfThought),
+            'response' => trim($cleanResponse),
+            'chainOfThought' => trim($chainOfThought),
         ];
     }
 
@@ -83,7 +83,6 @@ class OllamaUI {
                 $prompt = $_POST['prompt'];
                 $model = $_POST['model'];
                 $history = isset($_POST['history']) ? json_decode($_POST['history'], true) : [];
-                
                 if (!empty($prompt)) {
                     echo json_encode($this->generateChatResponse($prompt, $model, $history));
                     exit;
@@ -93,17 +92,13 @@ class OllamaUI {
         return ['models' => $this->listModels()];
     }
 
-    private function formatResponse($text) {
-        $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
-        $text = str_replace("\t", '&nbsp;&nbsp;&nbsp;&nbsp;', $text);
-        $text = nl2br($text, false);
-        $text = trim($text);
-        return $text;
-    }
-
     public function __debug_stderr($message) {
         $fp = fopen('php://stderr', 'w');
-        fputs($fp, $message . "\n");
+        if (is_array($message) || is_object($message)) {
+            fputs($fp, print_r($message, true) . "\n");
+        } else {
+            fputs($fp, $message . "\n");
+        }
         fclose($fp);
     }
 }
@@ -117,13 +112,16 @@ $data = $ui->handleRequest();
     <meta charset="UTF-8">
     <title>PHPllama Chat Web UI</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/default.min.css">
+    <script src="js/mathjax/tex-chtml.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.1/markdown-it.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>PHPllama Chat Web UI</h1>
         <div class="chat-interface">
             <div id="chat-history" class="chat-history"></div>
-            
             <form id="chat-form">
                 <select id="model-select" name="model">
                     <?php foreach ($data['models'] as $model): ?>
@@ -137,8 +135,25 @@ $data = $ui->handleRequest();
             </form>
         </div>
     </div>
-
     <script>
+
+    // Initialize markdown-it with highlighting
+    const md = window.markdownit({
+        html: true,
+        linkify: true,
+        typographer: true,
+        highlight: function (str, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+                try {
+                    return '<pre class="hljs"><code>' +
+                           hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                           '</code></pre>';
+                } catch (__) {}
+            }
+            return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+        }
+    });
+
     document.getElementById('chat-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
@@ -165,8 +180,14 @@ $data = $ui->handleRequest();
         const chatMessages = Array.from(chatHistory.querySelectorAll('.chat-message'))
             .filter(el => el !== loadingEl)
             .map(el => {
+                // Remove CoT button content if it exists (TODO: refactor this, it's a crappy way to do it)
+                const cotContainer = el.querySelector('.cot-container');
+                if (cotContainer) {
+                    el.removeChild(cotContainer);
+                }
+
                 const role = el.classList.contains('user-message') ? 'user' : 'assistant';
-                const content = el.textContent.replace(/^You \(.*?\): |^AI \(.*?\): /, '');
+                const content = el.textContent.replace(/^You \(.*?\): |^AI \(.*?\): /, '').trim();
                 return { role, content };
             });
 
@@ -186,12 +207,12 @@ $data = $ui->handleRequest();
 
             const aiMessageEl = document.createElement('div');
             aiMessageEl.classList.add('chat-message', 'ai-message');
-            
+
             // Create COT button if chain of thought exists
             let cotButton = '';
             if (data.chainOfThought.trim() && data.chainOfThought !== '<br>\n<br>') {
                 cotButton = `
-                    <div>
+                    <div class="cot-container">
                         <button class="cot-button">🤔</button>
                         <div class="cot-tooltip">
                             <strong>Chain of Thought:</strong>
@@ -201,21 +222,26 @@ $data = $ui->handleRequest();
                 `;
             }
 
-            aiMessageEl.innerHTML = `
-                <strong>AI (${modelSelect.value}):</strong> 
-                ${data.response}
+            // Render Markdown and apply syntax highlighting
+            const markedContent = md.render(data.response);
+            aiMessageEl.innerHTML = `<strong>AI (${modelSelect.value}):</strong> 
                 ${cotButton}
-            `;
+                <div class="message-content">${markedContent}</div>`;
+                
+            // Render MathJax (it's broken after markdown-it renders the content)
+            if (window.MathJax) {
+                MathJax.typesetPromise([aiMessageEl]).catch(function (err) {
+                    console.error('MathJax typesetting failed:', err);
+                });
+            }
+                
             chatHistory.appendChild(aiMessageEl);
-
             chatHistory.scrollTop = chatHistory.scrollHeight;
         })
         .catch(error => {
             if (loadingEl.parentNode) {
                 chatHistory.removeChild(loadingEl);
             }
-
-            console.log({error})
 
             const errorEl = document.createElement('div');
             errorEl.classList.add('chat-message', 'error-message');
