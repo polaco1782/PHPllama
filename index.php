@@ -117,10 +117,10 @@ $data = $ui->handleRequest();
 <body>
     <div class="container d-flex flex-column" style="height: 100vh;">
         <h1 flex-grow-1 class="flex-grow-1 text-center">PHPllama Chat Web UI</h1>
-        <div id="chat-history" class="flex-grow-1 text-light bg-secondary rounded shadow p-2 overflow-auto" style="height: 50vh;"></div>
+        <div id="chat-history" class="flex-grow-1 text-light rounded p-2 overflow-auto" style="height: 50vh;"></div>
         <form id="chat-form" class="flex-grow-1">
             <label for=""model-select" class="form-label">Model</label>
-            <select class="form-control" id="model-select" name="model">
+            <select class="form-control text-dark bg-white" id="model-select" name="model">
                 <?php foreach ($data['models'] as $model): ?>
                     <option value="<?= htmlspecialchars($model['name']) ?>">
                         <?= htmlspecialchars($model['name']) ?>
@@ -129,7 +129,7 @@ $data = $ui->handleRequest();
             </select>
             <br/>
             <label for="prompt-input" class="form-label">Prompt</label>
-            <textarea class="form-control" id="prompt-input" name="prompt" rows="4" placeholder="Enter your prompt here"></textarea>
+            <textarea class="form-control text-dark bg-white" id="prompt-input" name="prompt" rows="4" placeholder="Enter your prompt here" autofocus></textarea>
             <br/>
             <button type="submit" class="btn btn-primary w-100">Send</button>
         </form>
@@ -176,6 +176,27 @@ $data = $ui->handleRequest();
             return md.render(renderLatex(content));
         };
 
+        const sanitizeForHtmlAttribute = (str) => {
+            return str.replace(/["&'<>]/g, function(match) {
+                switch(match) {
+                    case '"': return '&quot;';
+                    case '&': return '&amp;';
+                    case "'": return '&#39;';
+                    case '<': return '&lt;';
+                    case '>': return '&gt;';
+                }
+            });
+        }
+
+        const escapeHTML = (toOutput) => {
+            return toOutput.replace(/\&/g, '&amp;')
+                .replace(/\</g, '&lt;')
+                .replace(/\>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/\'/g, '&#x27;')
+                .replace(/\//g, '&#x2F;');
+        }
+
         document.getElementById('chat-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -187,8 +208,9 @@ $data = $ui->handleRequest();
             if (!prompt) return;
 
             const userMessageEl = document.createElement('div');
-            userMessageEl.classList.add('chat-message', 'user-message');
-            userMessageEl.innerHTML = `<strong>You (${modelSelect.value}):</strong> ${prompt}`;
+            userMessageEl.classList.add('chat-message', 'user-message', 'p-2', 'm-1', 'rounded', 'bg-secondary', 'shadow');
+            userMessageEl.style = "border: 1px solid #eee; border-left-width: 5px;"
+            userMessageEl.innerHTML = `<strong>You (${modelSelect.value}):</strong> <br/>${escapeHTML(prompt)}`;
             chatHistory.appendChild(userMessageEl);
 
             const loadingEl = document.createElement('div');
@@ -202,12 +224,6 @@ $data = $ui->handleRequest();
             const chatMessages = Array.from(chatHistory.querySelectorAll('.chat-message'))
                 .filter(el => el !== loadingEl)
                 .map(el => {
-                    // Remove CoT button content if it exists (TODO: refactor this, it's a crappy way to do it)
-                    const cotContainer = el.querySelector('.cot-container');
-                    if (cotContainer) {
-                        el.removeChild(cotContainer);
-                    }
-
                     const role = el.classList.contains('user-message') ? 'user' : 'assistant';
                     const content = el.textContent.replace(/^You \(.*?\): |^AI \(.*?\): /, '').trim();
                     return { role, content };
@@ -228,23 +244,18 @@ $data = $ui->handleRequest();
                 chatHistory.removeChild(loadingEl);
 
                 const aiMessageEl = document.createElement('div');
-                aiMessageEl.classList.add('chat-message', 'ai-message');
+                aiMessageEl.classList.add('chat-message', 'ai-message', 'p-2', 'm-1', 'rounded', 'bg-secondary', 'shadow');
+                aiMessageEl.style = "border: 1px solid #003383; border-left-width: 5px;"
+
+                const id = (Math.random() + 1).toString(36).substring(2);
 
                 // Create COT button if chain of thought exists
                 let cotButton = '';
 
                 // temp disabled to create a fucking style for it
-                // if (data.chainOfThought.trim() && data.chainOfThought !== '<br>\n<br>') {
-                //     cotButton = `
-                //         <div class="cot-container">
-                //             <button class="cot-button">🤔</button>
-                //             <div class="cot-tooltip">
-                //                 <strong>Chain of Thought:</strong>
-                //                 <p>${data.chainOfThought}</p>
-                //             </div>
-                //         </div>
-                //     `;
-                // }
+                if (data.chainOfThought.trim() && data.chainOfThought !== '<br>\n<br>') {
+                    cotButton = `<b id="tt_${id}" data-toggle="tooltip" data-placement="top" title="${sanitizeForHtmlAttribute(data.chainOfThought)}">🤔</b>`;
+                }
 
                 const markedContent = md.render(data.response);
                 aiMessageEl.innerHTML = `<strong>AI (${modelSelect.value}):</strong> 
@@ -252,12 +263,15 @@ $data = $ui->handleRequest();
                     <div class="message-content">${processContent(data.response)}</div>`;
 
                 chatHistory.appendChild(aiMessageEl);
+                new bootstrap.Tooltip(document.querySelector(`#tt_${id}`));
                 chatHistory.scrollTop = chatHistory.scrollHeight;
             })
             .catch(error => {
                 if (loadingEl.parentNode) {
                     chatHistory.removeChild(loadingEl);
                 }
+
+                console.error(error);
 
                 const errorEl = document.createElement('div');
                 errorEl.classList.add('chat-message', 'error-message');
