@@ -34,7 +34,10 @@ class OllamaUI {
         $ch = curl_init($this->ollamaUrl . '/chat');
 
         // Add startup directive to history
-        $history = array_merge([['role' => 'assistant', 'content' => $this->startupDirective]], $history);
+        $history = array_merge([[
+            'role' => 'assistant',
+            'content' => $this->startupDirective
+        ]], $history);
 
         $messages = array_map(function($msg) {
             return [
@@ -42,11 +45,6 @@ class OllamaUI {
                 'content' => $msg['content']
             ];
         }, $history);
-        
-        $messages[] = [
-            'role' => 'user',
-            'content' => $prompt
-        ];
 
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
