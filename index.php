@@ -112,14 +112,13 @@ $data = $ui->handleRequest();
     <title>PHPllama Chat Web UI</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/default.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
 </head>
 <body>
     <div class="container d-flex flex-column" style="height: 100vh;">
         <h1 flex-grow-1 class="flex-grow-1 text-center">PHPllama Chat Web UI</h1>
         <div id="chat-history" class="flex-grow-1 text-light rounded p-2 overflow-auto" style="height: 50vh;"></div>
         <form id="chat-form" class="flex-grow-1">
-            <label for=""model-select" class="form-label">Model</label>
+            <label for="model-select" class="form-label">Model</label>
             <select class="form-control text-dark bg-white" id="model-select" name="model">
                 <?php foreach ($data['models'] as $model): ?>
                     <option value="<?= htmlspecialchars($model['name']) ?>">
@@ -136,8 +135,9 @@ $data = $ui->handleRequest();
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.1/markdown-it.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-mathjax@2.0.0/markdown-it-mathjax.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script type="text/javascript">
         const md = window.markdownit({
@@ -154,26 +154,11 @@ $data = $ui->handleRequest();
                 }
                 return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
             }
-        });
+        }).use(window.markdownitMathjax());
 
-        const renderLatex = (text) => {
-            return text
-                .replace(/\\\[(.+?)\\\]/gs, (_, math) =>
-                    katex.renderToString(math.trim(), { displayMode: true })
-                )
-                .replace(/\\\((.+?)\\\)/g, (_, math) =>
-                    katex.renderToString(math.trim(), { displayMode: false })
-                )
-                .replace(/\$\$(.+?)\$\$/gs, (_, math) =>
-                    katex.renderToString(math.trim(), { displayMode: true })
-                )
-                .replace(/\$(.+?)\$/g, (_, math) =>
-                    katex.renderToString(math.trim(), { displayMode: false })
-                );
-        };
-
+        // Simple content processing function - markdown-it-mathjax handles both markdown and math
         const processContent = (content) => {
-            return md.render(renderLatex(content));
+            return md.render(content);
         };
 
         const sanitizeForHtmlAttribute = (str) => {
@@ -251,20 +236,24 @@ $data = $ui->handleRequest();
 
                 // Create COT button if chain of thought exists
                 let cotButton = '';
-
-                // temp disabled to create a fucking style for it
                 if (data.chainOfThought.trim() && data.chainOfThought !== '<br>\n<br>') {
                     cotButton = `<b id="tt_${id}" data-toggle="tooltip" data-placement="top" title="${sanitizeForHtmlAttribute(data.chainOfThought)}">🤔</b>`;
                 }
 
-                const markedContent = md.render(data.response);
                 aiMessageEl.innerHTML = `<strong>AI (${modelSelect.value}):</strong> 
                     ${cotButton}
                     <div class="message-content">${processContent(data.response)}</div>`;
 
                 chatHistory.appendChild(aiMessageEl);
-                new bootstrap.Tooltip(document.querySelector(`#tt_${id}`));
+                if(data.chainOfThought.length > 0) {
+                    new bootstrap.Tooltip(document.querySelector(`#tt_${id}`));
+                }
                 chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                //Initialize MathJax after adding new content
+                if (window.MathJax) {
+                    window.MathJax.typeset();
+                }
             })
             .catch(error => {
                 if (loadingEl.parentNode) {
