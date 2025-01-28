@@ -47,7 +47,11 @@ const addChatMessage = (user, message, cot) => {
         content += `<b id="tt_${id}" data-toggle="tooltip" data-placement="top" title="${escapeHtml(cot)}">🤔</b>`;
     }
     
-    messageEl.innerHTML = content + `<br/>${escapeHtml(message)}`;
+    if (user === 'user') {
+        messageEl.innerHTML = content + `<br/>${escapeHtml(message)}`;
+    } else {
+        messageEl.innerHTML = content + `<br/>${md.render(message)}`;
+    }
     chatContainer.appendChild(messageEl);
     cot && new bootstrap.Tooltip(document.querySelector(`#tt_${id}`));
     chatContainer.scrollTop = chatContainer.scrollHeight;
