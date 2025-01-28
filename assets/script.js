@@ -7,28 +7,27 @@ const md = window.markdownit({
     highlight: function (str, lang) {
         if (lang && hljs.getLanguage(lang)) {
             try {
-                return '<pre class="hljs"><code>' +
-                        hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
-                    '</code></pre>';
-            } catch (__) {}
+                const hlvalue = hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
+                return `<pre class="hljs"><code>${hlvalue}</code></pre>`;
+            } catch (_) {}
         }
         return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
     }
 }).use(window.markdownitMathjax());
 
+
 const escapeHtml = (str) => {
-    return str.replace(/["&'<>]/g, function(match) {
-        switch(match) {
-            case '"': return '&quot;';
-            case '&': return '&amp;';
-            case "'": return '&#39;';
-            case '<': return '&lt;';
-            case '>': return '&gt;';
-        }
-    });
+    return str.replace(/["&'<>]/g, (match) => ({
+        '"': '&quot;',
+        '&': '&amp;', 
+        "'": '&#39;', 
+        '<': '&lt;', 
+        '>': '&gt;'
+    }[match]));
 }
 
-const addChatMessage = (user, message, cot) => {
+const addChatMessage = (user, message, cot, extraClass) => {
+    removeMessageInfos();
     messages.push({
         role: user,
         content: message,
@@ -41,7 +40,7 @@ const addChatMessage = (user, message, cot) => {
     let name = user === 'user' ? 'You' : 'AI';
     let content = `<strong>${name} (${modelSelect.value}):</strong>`;
 
-    messageEl.classList.add(user, 'chat-message', 'user-message', 'p-2', 'rounded', 'bg-secondary', 'shadow', user);
+    messageEl.classList.add('chat-message', 'user-message', 'p-2', 'rounded', 'bg-secondary', 'shadow', user, extraClass);
 
     if (cot.trim() && cot !== '<br>\n<br>') {
         content += `<b id="tt_${id}" data-toggle="tooltip" data-placement="top" title="${escapeHtml(cot)}">🤔</b>`;
@@ -57,6 +56,40 @@ const addChatMessage = (user, message, cot) => {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 };
 
+const addMessageInfos = (info, type) => {
+    const chatContainer = document.querySelector('#chat-history');
+    const loadingEl = document.createElement('div');
+    loadingEl.classList.add('p-2', 'rounded', 'bg-secondary', 'shadow', 'chat-message', 'info-message', `info-message-${type}`);
+    loadingEl.textContent = info;
+    chatContainer.appendChild(loadingEl);
+}
+
+const removeMessageInfos = () => document.querySelectorAll('.info-message').forEach((el) => el.remove());
+
+const toggleEnableChat = (enable) => {
+    document.querySelectorAll('#submit, #prompt-input').forEach((element) => {
+        element[enable ? 'removeAttribute' : 'setAttribute']('disabled', 'disabled');
+    });
+    document.querySelector('#prompt-input').focus();
+};
+
+const toggleLoading = (enable) => {
+    toggleEnableChat(!enable);
+    console.log('loading', enable)
+    if (enable) {
+        console.log('adding')
+        addMessageInfos('Generating response...', 'warning');
+    }
+}
+
+const toFormData = (object) => {
+    const formData = new FormData();
+    for (let i in object) {
+        formData.append(i, object[i]);
+    }
+    return formData; 
+};
+
 document.getElementById('chat-form').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -64,49 +97,37 @@ document.getElementById('chat-form').addEventListener('submit', function(e) {
     const chatHistory = document.getElementById('chat-history');
     const prompt = promptInput.value.trim();
     
-    if (!prompt) return;
+    if (!prompt) {
+        return;
+    }
 
     addChatMessage('user', prompt, '');
-
-    const loadingEl = document.createElement('div');
-    loadingEl.classList.add('chat-message', 'loading-message');
-    loadingEl.textContent = 'Generating response...';
-    chatHistory.appendChild(loadingEl);
 
     chatHistory.scrollTop = chatHistory.scrollHeight;
     promptInput.value = '';
 
-    const formData = new FormData();
-    formData.append('action', 'generate');
-    formData.append('prompt', prompt);
-    formData.append('model', document.querySelector('#model-select').value);
-    formData.append('history', JSON.stringify(messages));
+    toggleLoading(true);
 
     fetch('', {
         method: 'POST',
-        body: formData
+        body: toFormData({
+            action: 'generate',
+            prompt,
+            model: document.querySelector('#model-select').value,
+            history: JSON.stringify(messages),
+        })
     })
     .then(response => response.json())
     .then(data => {
-        chatHistory.removeChild(loadingEl);
-
         addChatMessage('assistant', data.response, data.chainOfThought.length > 0 ? data.chainOfThought : '');
-
         if (window.MathJax) {
             window.MathJax.typeset();
         }
+        toggleLoading(false);
     })
-    .catch(error => {
-        if (loadingEl.parentNode) {
-            chatHistory.removeChild(loadingEl);
-        }
-
-        console.error(error); // If you see that fucking shit, please: debug > code > commit > push :D
-
-        const errorEl = document.createElement('div');
-        errorEl.classList.add('chat-message', 'error-message');
-        errorEl.textContent = 'Error generating response';
-        chatHistory.appendChild(errorEl);
+    .catch(() => {
+        toggleLoading(false);
+        addMessageInfos('Failed to generate.', 'error');
     });
 });
 

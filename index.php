@@ -34,7 +34,7 @@ $data = $ui->handleRequest();
             <label for="prompt-input" class="form-label">Prompt</label>
             <textarea class="form-control text-dark bg-white" id="prompt-input" name="prompt" rows="4" placeholder="Enter your prompt here" autofocus></textarea>
             <br/>
-            <button type="submit" class="btn btn-primary w-100">Send</button>
+            <button type="submit" id="submit" class="btn btn-primary w-100">Send</button>
         </form>
     </div>
 
